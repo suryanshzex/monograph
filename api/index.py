@@ -15,8 +15,7 @@ def ltx(expr) -> str:
     return latex(expr, mul_symbol=' ')
 
 def clean_expr(expr: str) -> str:
-    s = (expr or '').strip()
-    s = s.replace('^', '**')
+    s = (expr or '').strip().replace('^', '**')
     s = re.sub(r'\bpi\b', 'pi', s)
     s = re.sub(r'\be\b', 'E', s)
     return s
@@ -240,28 +239,3 @@ async def compute(request: Request):
         resp["error"] = str(e)
 
     return JSONResponse(resp)
-
-@app.post("/taylor")
-async def taylor(request: Request):
-    data = await request.json()
-    expr = clean_expr(data.get("expr", ""))
-    a = clean_expr(data.get("a", "0"))
-    degree = int(data.get("degree", 10))
-    node = safe_sympify(expr)
-    a_node = safe_sympify(a)
-    if node is None or a_node is None:
-        return JSONResponse({"expr": expr, "a": a, "degree": degree, "polynomial": "", "latex": ""})
-    try:
-        ser = series(node, x, a_node, degree + 1).removeO()
-        return JSONResponse({
-            "expr": expr, "a": a, "degree": degree,
-            "polynomial": str(ser), "latex": ltx(ser)
-        })
-    except Exception as e:
-        return JSONResponse({"expr": expr, "a": a, "degree": degree, "polynomial": "", "latex": f"ERROR: {e}"})
-
-@app.post("/compute")
-async def compute(request: Request):
-    data = await request.json()
-    raw = data.get("query", "")
-    return JSONResponse({ "ok": True, "echo": raw })

@@ -1,5 +1,9 @@
-node_modules
-dist
-*.log
+node_modules/
+dist/
+.vite/
+__pycache__/
+*.pyc
+.venv/
+.env
 .DS_Store
-.vite
+backend/

@@ -1,14 +1,14 @@
-const BASE = import.meta?.env?.VITE_FX_API_URL || '/api';
+import { computeLocal, buildTaylor } from './engine.js';
 
-async function post(path, body) {
-  const r = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error(`API ${r.status}: ${await r.text()}`);
-  return r.json();
+export async function computeQuery(query) {
+  return computeLocal(query);
 }
 
-export const computeQuery = (query) => post('/compute', { query });
-export const taylorPoly   = (expr, a, degree) => post('/taylor', { expr, a, degree });
+export async function taylorPoly(expr, a, degree) {
+  const t = buildTaylor(expr, a, degree);
+  return {
+    expr, a, degree,
+    polynomial: t.polynomial,
+    latex: t.latex
+  };
+}

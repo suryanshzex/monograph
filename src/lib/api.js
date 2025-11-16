@@ -1,4 +1,4 @@
-const BASE = import.meta?.env?.VITE_FX_API_URL || 'http://127.0.0.1:8000/api';
+const BASE = import.meta?.env?.VITE_FX_API_URL || '/api';
 
 async function post(path, body) {
   const r = await fetch(`${BASE}${path}`, {
@@ -11,4 +11,4 @@ async function post(path, body) {
 }
 
 export const computeQuery = (query) => post('/compute', { query });
-export const taylorPoly = (expr, a, degree) => post('/taylor', { expr, a, degree });
+export const taylorPoly   = (expr, a, degree) => post('/taylor', { expr, a, degree });

@@ -1,0 +1,72 @@
+:root{
+    --cp-backdrop-blur: 6px;       /* subtle */
+    --cp-backdrop-dim: 0.14;       /* very light dim */
+    --cp-shell-alpha: 0.06;        /* tiny darker bg that blends */
+    --cp-shell-shadow: 0 30px 80px -28px rgba(0,0,0,0.62);
+    --cp-font: 17px;               /* larger base text */
+    --cp-font-big: 1.35rem;        /* larger math headline */
+    --cp-inline-math: 1.12rem;     /* inline math size */
+  }
+  
+  .cp-root{ position: fixed; inset: 0; z-index: 2500; pointer-events: none; }
+  
+  .cp-overlay{
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,var(--cp-backdrop-dim));
+    backdrop-filter: blur(var(--cp-backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--cp-backdrop-blur));
+    pointer-events: auto;
+  }
+  
+  .cp-center{
+    position: absolute; inset: 0;
+    display: grid;
+    place-items: center;           /* true center */
+    pointer-events: none;
+  }
+  
+  .cp-shell{
+    width: min(900px, 92vw);
+    padding: 16px 18px 14px;
+    border-radius: 16px;
+    background: rgba(12,12,12,var(--cp-shell-alpha)); /* tiny darker bg */
+    box-shadow: var(--cp-shell-shadow);
+    pointer-events: auto;
+    border: none;
+  }
+  
+  .cp-input{
+    width: 100%;
+    font-size: calc(var(--cp-font) + 1px);
+    padding: 14px 16px;
+    border: none; outline: none;
+    border-radius: 12px;
+    color: #f7f7f7;
+    background: rgba(255,255,255,0.10);
+  }
+  .cp-input::placeholder{ color: rgba(247,247,247,0.64); }
+  
+  .cp-results{
+    margin-top: 10px;
+    max-height: 42vh;
+    overflow: auto;
+    scrollbar-width: thin;
+  }
+  
+  .cp-row{
+    font-size: var(--cp-font);
+    line-height: 1.6;
+    color: rgba(248,248,248,0.98);
+    padding: 6px 2px;
+  }
+  .cp-row.big .k{ font-size: var(--cp-font-big); }
+  
+  .cp-row.err{ color: #ffb6b6; }
+  
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  
+  /* KaTeX tune for readability on dark, slightly larger inline math */
+  .k, .k .base { color: #fbfbfb; font-size: var(--cp-inline-math); }
+  .k.blk { display: block; }
+  
+  .mr12 { margin-right: 12px; }

@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Graph from './components/Graph.jsx';
 import InfoPanel from './components/InfoPanel.jsx';
+import InputTool from './components/InputTool.jsx';
 import { taylorFromExpr } from './lib/taylor.js';
 import { buildMathFunctions, detectParams, normalizeImplicitMul } from './lib/math.js';
 import { prettyExpr, formatNumberSmart, parseNumberExpr } from './lib/format.js';
 import { PLOT_INNER_W, PLOT_INNER_H } from './lib/plot.js';
+import './InputStyles.css';
 
 const defaultDomain = { min: -5, max: 5 };
 const fmt5 = (n) => formatNumberSmart(n, { maxDecimals: 5 });
@@ -17,80 +19,43 @@ function randLayerColor(seed = Math.random()) {
   const l = 72 + Math.floor(seed * 6);
   return `hsl(${h} ${s}% ${l}%)`;
 }
-
 function rewriteEHatChain(input) {
   if (!input || typeof input !== 'string') return input;
-  const s = input;
-  let out = '';
-  let i = 0;
+  const s = input; let out = ''; let i = 0;
   const isIdentChar = (ch) => /[A-Za-z0-9_]/.test(ch);
-
   while (i < s.length) {
     const ch = s[i];
-
     if ((ch === 'e' || ch === 'E') && i + 1 < s.length && s[i + 1] === '^') {
       const prev = i > 0 ? s[i - 1] : '';
-      if (isIdentChar(prev)) {
-        out += ch;
-        i += 1;
-        continue;
-      }
-
-      let j = i + 2;
-      let expStr = '';
-
+      if (isIdentChar(prev)) { out += ch; i++; continue; }
+      let j = i + 2; let expStr = '';
       if (j < s.length && s[j] === '(') {
-        // e^( ...balanced... )
-        let depth = 1;
-        j += 1;
-        const start = j;
-        while (j < s.length && depth > 0) {
-          if (s[j] === '(') depth += 1;
-          else if (s[j] === ')') depth -= 1;
-          j += 1;
-        }
+        let depth = 1; j++; const start = j;
+        while (j < s.length && depth > 0) { if (s[j] === '(') depth++; else if (s[j] === ')') depth--; j++; }
         expStr = s.slice(start, j - 1);
       } else {
-        const start = j;
-        let depth = 0;
+        const start = j; let depth = 0;
         while (j < s.length) {
           const c = s[j];
-          if (c === '(') { depth += 1; j += 1; continue; }
-          if (c === ')') {
-            if (depth === 0) break;
-            depth -= 1; j += 1; continue;
-          }
-          if (depth === 0 && (c === '+' || c === '-' || c === '*' || c === '/' || c === ',')) break;
-          j += 1;
+          if (c === '(') { depth++; j++; continue; }
+          if (c === ')') { if (depth === 0) break; depth--; j++; continue; }
+          if (depth === 0 && /[+\-*/:,]/.test(c)) break;
+          j++;
         }
         expStr = s.slice(start, j).trim();
       }
-
-      out += `exp(${expStr})`;
-      i = j;
-      continue;
+      out += `exp(${expStr})`; i = j; continue;
     }
-
-    out += ch;
-    i += 1;
+    out += ch; i++;
   }
-
   return out;
 }
 
 export default function App() {
   const [domain, setDomain] = useState(defaultDomain);
   const [layers, setLayers] = useState([{
-    id: 1,
-    expr: 'sin(x)',
-    color: '#ffffff',
-    opacity: 1,
-    showD1: false,
-    showD2: false,
-    showTaylor: false,
-    taylorDegree: 5,
-    taylorA0Expr: '0',
-    params: {}
+    id: 1, expr: 'sin(x)', color: '#ffffff', opacity: 1,
+    showD1: false, showD2: false, showTaylor: false, taylorDegree: 5, taylorA0Expr: '0', params: {}
   }]);
 
   const [showSettings, setShowSettings] = useState(false);
@@ -101,6 +66,7 @@ export default function App() {
   const [showIntersections, setShowIntersections] = useState(true);
   const [manualPoints, setManualPoints] = useState([]);
   const [showInfo, setShowInfo] = useState(false);
+  const [showCommand, setShowCommand] = useState(false);
 
   const buildError = useMemo(() => {
     try {
@@ -151,8 +117,14 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey) return;
+      if (showCommand && e.key === 'Escape') { setShowCommand(false); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommand(v => !v);
+        return;
+      }
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.metaKey || e.ctrlKey) return;
       const k = e.key.toLowerCase();
       if (k === 's') setShowSettings(v => !v);
       if (k === 'c') center();
@@ -162,7 +134,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [center, zoomButtons]);
+  }, [center, zoomButtons, showCommand]);
 
   const updateLayerById = (id, patch) => setLayers(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l));
   const updateLayerExpr = (id, expr) => {
@@ -226,6 +198,7 @@ export default function App() {
         <div className="actions">
           <button className="btn" onClick={() => setShowSettings(true)} title="Settings (S)">settings</button>
           <button className="btn" onClick={center} title="Center (C)">center</button>
+          <button className="btn" onClick={() => setShowCommand(true)} title="Command (Cmd/Ctrl+K)">command</button>
         </div>
       </header>
 
@@ -274,102 +247,18 @@ export default function App() {
             showIntersections={showIntersections}
             manualPoints={manualPoints}
             onManualPointsChange={setManualPoints}
-            onManualPointAdd={(x, y) => addManualPoint(x, y)}
+            onManualPointAdd={()=>{}}
           />
-
           <InfoPanel open={showInfo} onOpen={() => setShowInfo(true)} onClose={() => setShowInfo(false)} />
         </main>
       </div>
 
-      <AnimatePresence>
-        {showSettings && (
-          <>
-            <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 0.45 }} exit={{ opacity: 0 }} onClick={() => setShowSettings(false)} />
-            <motion.div className="drawer sleek small" initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }} transition={{ type: 'spring', stiffness: 380, damping: 36 }}>
-              <div className="drawer-head">
-                <h2>Settings</h2>
-                <button className="btn" onClick={() => setShowSettings(false)}>close</button>
-              </div>
-
-              {buildError && <div className="error polished">{buildError}</div>}
-
-              <div className="settings-min compact">
-                {layers.map((l, idx) => (
-                  <section className="panel-clean" key={l.id}>
-                    <label>
-                      {`function ${idx + 1}`}
-                      <input className="input bare mono" type="text" value={l.expr} onChange={(e) => updateLayerExpr(l.id, e.target.value)} placeholder={idx === 0 ? 'sin(x)' : 'a*x + b'} />
-                    </label>
-
-                    {l.params && Object.keys(l.params).length > 0 && (
-                      <>
-                        <div className="pp-head small">Parameters</div>
-                        {Object.entries(l.params).map(([k, meta]) => (
-                          <div className="taylor-row" key={`${l.id}-param-${k}`}>
-                            <span>{k}</span>
-                            <input className="input range pretty" type="range" min={meta.min} max={meta.max} step={meta.step} value={meta.value}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                setLayers(ls => ls.map(L => L.id !== l.id ? L : { ...L, params: { ...L.params, [k]: { ...meta, value: v } } }));
-                              }}
-                            />
-                            <span className="range-val mono">{formatNumberSmart(meta.value, { maxDecimals: 4 })}</span>
-                          </div>
-                        ))}
-                      </>
-                    )}
-
-                    <div className="taylor-row" style={{ marginTop: 4 }}>
-                      <span>graph opacity</span>
-                      <input className="input range pretty" type="range" min={0.1} max={1} step={0.05} value={l.opacity ?? 1}
-                        onChange={(e) => updateLayerById(l.id, { opacity: parseFloat(e.target.value) })} />
-                      <span className="range-val mono">{formatNumberSmart(l.opacity ?? 1, { maxDecimals: 2 })}</span>
-                    </div>
-
-                    <div className="taylor-row two-cols" style={{ marginTop: 4 }}>
-                      <span>graph color</span>
-                      <input className="input color subtle bare-color" type="color" value={l.color} onChange={(e) => updateLayerColor(l.id, e.target.value)} title="graph color" />
-                    </div>
-
-                    <div className="pp-row toggles" style={{ marginTop: 6 }}>
-                      <button className={`chip toggle ${l.showD1 ? 'on' : ''}`} onClick={() => updateLayerById(l.id, { showD1: !l.showD1 })}>f′(x)</button>
-                      <button className={`chip toggle ${l.showD2 ? 'on' : ''}`} onClick={() => updateLayerById(l.id, { showD2: !l.showD2 })}>f″(x)</button>
-                      <button className={`chip toggle ${l.showTaylor ? 'on' : ''}`} onClick={() => updateLayerById(l.id, { showTaylor: !l.showTaylor })}>show taylor</button>
-                    </div>
-
-                    <div className="taylor-row">
-                      <span>taylor degree</span>
-                      <input className="input range pretty" type="range" min="1" max="20" value={l.taylorDegree} onChange={(e) => updateLayerById(l.id, { taylorDegree: Number(e.target.value) })} />
-                      <span className="range-val mono">{l.taylorDegree}</span>
-                    </div>
-
-                    <div className="taylor-row two-cols">
-                      <span>taylor center</span>
-                      <input className="input bare mono" type="text" value={l.taylorA0Expr} onChange={(e) => updateLayerById(l.id, { taylorA0Expr: e.target.value })} placeholder="e.g., 0, pi/2, 2" />
-                    </div>
-
-                    {idx > 0 && (
-                      <div className="inline-buttons">
-                        <button className="chip danger" onClick={() => removeLayer(l.id)} title="Remove function">remove</button>
-                      </div>
-                    )}
-                    {idx < layers.length - 1 && <div className="divider" />}
-                  </section>
-                ))}
-
-                <div className="inline-buttons" style={{ marginTop: 8 }}>
-                  <button className="chip" onClick={addLayer}>+ add function</button>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
       <footer className="footer lifted">
-        <span>Shortcuts: S settings • Left-drag pan (Shift = axis lock) • Wheel zoom (uniform) • +/− or numpad ± • Alt-click to add point • Drag on a curve to trace • Drag point + Shift to snap</span>
+        <span>Shortcuts: Cmd/Ctrl+K command • S settings • Drag pan (Shift lock) • Wheel zoom • +/- • Alt-click add point</span>
         <div className="made-with">made with 💜 by <a href="https://suryanshzex.com" target="_blank" rel="noopener noreferrer">@suryanshzex</a></div>
       </footer>
+
+      <InputTool open={showCommand} onClose={() => setShowCommand(false)} />
     </div>
   );
 }

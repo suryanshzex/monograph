@@ -92,8 +92,7 @@ function robustYRange(series, fallback = [-1, 1]) {
   if (!Number.isFinite(ratio) || ratio > 1e6 || span > 1e12) {
     const mid = sorted.slice(Math.floor(sorted.length*0.30), Math.ceil(sorted.length*0.70));
     if (mid.length >= 4) {
-      lo = quant(mid, 0.03);
-      hi = quant(mid, 0.97);
+      lo = quant(mid, 0.03); hi = quant(mid, 0.97);
     }
   }
   if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo === hi) return fallback;
@@ -110,7 +109,7 @@ function niceStep(range, target=8) {
 function genTicks(min,max,step){
   const first = Math.ceil(min/step)*step;
   const arr=[];
-  for(let t=first; t<=max+1e-12; t+=step) arr.push(+t.toFixed(12));
+  for(let t=first;t<=max+1e-12;t+=step) arr.push(+t.toFixed(12));
   return arr;
 }
 
@@ -129,13 +128,13 @@ export default function Graph({
   showIntersections = true,
   manualPoints = [],
   onManualPointsChange = () => {},
-  onManualPointAdd = () => {}
+  onManualPointAdd = () => {},
+  showFrame = true
 }) {
   const width = PLOT_WIDTH, height = PLOT_HEIGHT, pad = PLOT_PAD;
   const plotW = PLOT_INNER_W, plotH = PLOT_INNER_H;
   const N = samplesForWidth(plotW);
   const ND = Math.max(200, Math.floor(N*0.55));
-
   const builtLayers = useMemo(()=>layers.map(l=>{
     try {
       const vars = l.params ? Object.fromEntries(Object.entries(l.params).map(([k,v])=>[k,v.value])) : {};
@@ -145,7 +144,6 @@ export default function Graph({
       return { ...l, f: (_)=>NaN, df: (_)=>NaN, error:'Invalid expression' };
     }
   }), [layers]);
-
   const seriesPerLayer = useMemo(()=>builtLayers.map(bl=>{
     const f = bl.f || (_=>NaN);
     const df = bl.df || (_=>NaN);
@@ -164,13 +162,11 @@ export default function Graph({
     const dataD2 = sampleFunction(d2, domain.min, domain.max, ND);
     return { id: bl.id, dataF, dataD, dataD2 };
   }), [builtLayers, domain, N, ND]);
-
   const computedY = useMemo(()=>{
     const all = seriesPerLayer.flatMap(s=>s.dataF);
     return robustYRange([all], [-2,2]);
   }, [seriesPerLayer]);
   useEffect(()=>{ onYRangeComputed && onYRangeComputed(computedY); }, [computedY, onYRangeComputed]);
-
   const yRangeUsed = yRange ? [yRange.min, yRange.max] : computedY;
   const sx = (domain.max - domain.min)/plotW || 1;
   const sy = (yRangeUsed[1] - yRangeUsed[0])/plotH || sx;
@@ -178,7 +174,6 @@ export default function Graph({
   const yToSvg = y => pad + (yRangeUsed[1] - y)/sy;
   const svgToX = px => domain.min + (px - pad)*sx;
   const svgToY = py => yRangeUsed[1] - (py - pad)*sy;
-
   const ticks = useMemo(()=>{
     const xs = niceStep(domain.max - domain.min, 8);
     const ys = niceStep(yRangeUsed[1]-yRangeUsed[0], 8);
@@ -187,7 +182,6 @@ export default function Graph({
       yTicks: genTicks(yRangeUsed[0], yRangeUsed[1], ys)
     };
   }, [domain, yRangeUsed]);
-
   const pathsPerLayer = useMemo(()=>seriesPerLayer.map((srs,idx)=>{
     const color = layers[idx]?.color || '#fff';
     const opacity = layers[idx]?.opacity ?? 1;
@@ -200,7 +194,6 @@ export default function Graph({
     const pD2 = (!hide && layers[idx]?.showD2) ? buildUniformPath(sanitize(srs.dataD2), xToSvg, yToSvg) : '';
     return { id: layers[idx]?.id ?? idx, pF, pD, pD2, color, opacity, hide };
   }), [seriesPerLayer, layers, xToSvg, yToSvg]);
-
   const rootsPerLayer = useMemo(()=>{
     if (!showRoots) return layers.map((l,i)=>({ id: layers[i]?.id ?? i, roots: [] }));
     return seriesPerLayer.map((s,idx)=>{
@@ -219,7 +212,6 @@ export default function Graph({
       return { id: layers[idx]?.id ?? idx, roots: out };
     });
   }, [showRoots, seriesPerLayer, layers, pathsPerLayer]);
-
   const extsPerLayer = useMemo(()=>{
     if (!showExtrema) return layers.map((l,i)=>({ id: layers[i]?.id ?? i, exts: [] }));
     return seriesPerLayer.map((s,idx)=>{
@@ -239,7 +231,6 @@ export default function Graph({
       return { id: layers[idx]?.id ?? idx, exts: out };
     });
   }, [showExtrema, seriesPerLayer, builtLayers, layers, pathsPerLayer]);
-
   const intersections = useMemo(()=>{
     if (!showIntersections || seriesPerLayer.length < 2) return [];
     const out=[];
@@ -300,7 +291,6 @@ export default function Graph({
     pendingTaylorRecompute.current=setTimeout(()=>recomputeTaylor.current(), 60);
     return ()=>{ if (pendingTaylorRecompute.current) clearTimeout(pendingTaylorRecompute.current); };
   }, [isPanning, taylorBuilder, domain.min, domain.max, ...layers.map(l=>`${l.id}|${l.expr}|${l.taylorDegree}|${l.taylorA0Val}|${l.showTaylor}|${l.color}|${l.opacity}`)]);
-
   const svgRef=useRef(null);
   const [hoverPointId,setHoverPointId]=useState(null);
   const [hoverFeature,setHoverFeature]=useState(null);
@@ -333,7 +323,7 @@ export default function Graph({
     const R2=16*16;
     let best=null;
     for(let i=0;i<seriesPerLayer.length;i++){
-      if (pathsPerLayer[i]?.hideBase) continue;
+      if (pathsPerLayer[i]?.hide) continue;
       const pts=seriesPerLayer[i].dataF;
       for(let k=0;k<pts.length;k++){
         const p=pts[k];
@@ -371,8 +361,7 @@ export default function Graph({
     const px=e.clientX-rect.left, py=e.clientY-rect.top;
     if(!inside(px,py)) return;
     if ((e.button===0 || (e.buttons&1)) && e.altKey){
-      onManualPointAdd(svgToX(px), svgToY(py));
-      return;
+      onManualPointAdd(svgToX(px), svgToY(py)); return;
     }
     if (e.button===0 || (e.buttons&1)){
       const hitId=hitManualPoint(px,py);
@@ -384,8 +373,7 @@ export default function Graph({
         dragRef.current.pointStart={ x:p?.x ?? svgToX(px), y:p?.y ?? svgToY(py) };
         dragRef.current.axisLocked=null;
         svgRef.current.setPointerCapture?.(e.pointerId);
-        e.preventDefault();
-        return;
+        e.preventDefault(); return;
       }
       const hitCurve=findNearestCurvePoint(px,py);
       if (hitCurve){
@@ -395,8 +383,7 @@ export default function Graph({
         dragRef.current.traceX=hitCurve.x;
         dragRef.current.traceY=hitCurve.y;
         svgRef.current.setPointerCapture?.(e.pointerId);
-        e.preventDefault();
-        return;
+        e.preventDefault(); return;
       }
     }
     if (e.button===0 || e.button===1 || (e.buttons&1) || (e.buttons&4)){
@@ -440,23 +427,22 @@ export default function Graph({
       return;
     }
     if(dragRef.current.action==='trace' && dragRef.current.traceLayer!=null){
-      const layerIdx=dragRef.current.traceLayer;
-      const x=svgToX(px);
-      let y=NaN;
-      try{ y=builtLayers[layerIdx]?.f(x);}catch{y=NaN;}
-      if(!Number.isFinite(y)){
-        const pts=seriesPerLayer[layerIdx]?.dataF ?? [];
+      const X=svgToX(px);
+      let Y=NaN;
+      try{ Y=builtLayers[dragRef.current.traceLayer]?.f(X);}catch{Y=NaN;}
+      if(!Number.isFinite(Y)){
+        const pts=seriesPerLayer[dragRef.current.traceLayer]?.dataF ?? [];
         if(pts.length){
           let kBest=0, dxBest=Infinity;
           for(let k=0;k<pts.length;k++){
-            const dxv=Math.abs(pts[k].x - x);
+            const dxv=Math.abs(pts[k].x - X);
             if(dxv<dxBest){ dxBest=dxv; kBest=k; }
           }
-          y=pts[kBest].y;
+          Y=pts[kBest].y;
         }
       }
-      dragRef.current.traceX=x;
-      dragRef.current.traceY=y;
+      dragRef.current.traceX=X;
+      dragRef.current.traceY=Y;
       return;
     }
     if(dragRef.current.action==='pan'){
@@ -551,8 +537,7 @@ export default function Graph({
     return ()=>el.removeEventListener('contextmenu', handler);
   }, []);
   const hoveredPoint=manualPoints.find(p=>p.id===hoverPointId) || null;
-  const traceActive = dragRef.current.dragging && dragRef.current.action==='trace' &&
-    Number.isFinite(dragRef.current.traceX) && Number.isFinite(dragRef.current.traceY);
+  const traceActive = dragRef.current.dragging && dragRef.current.action==='trace' && Number.isFinite(dragRef.current.traceX) && Number.isFinite(dragRef.current.traceY);
   const tracePx=traceActive?xToSvg(dragRef.current.traceX):null;
   const tracePy=traceActive?yToSvg(dragRef.current.traceY):null;
   const hoverPx=hoveredPoint?xToSvg(hoveredPoint.x):null;
@@ -577,37 +562,24 @@ export default function Graph({
             <stop offset="0%" stopColor="#60a5fa"/>
             <stop offset="100%" stopColor="#f472b6"/>
           </linearGradient>
-          <clipPath id="plot-clip">
-            <rect x={pad} y={pad} width={plotW} height={plotH}/>
-          </clipPath>
+          <clipPath id="plot-clip"><rect x={PLOT_PAD} y={PLOT_PAD} width={PLOT_INNER_W} height={PLOT_INNER_H}/></clipPath>
         </defs>
 
-        <rect x={pad} y={pad} width={plotW} height={plotH} fill="transparent" stroke="rgba(255,255,255,0.1)"/>
+        {showFrame && (
+          <rect x={PLOT_PAD} y={PLOT_PAD} width={PLOT_INNER_W} height={PLOT_INNER_H} fill="transparent" stroke="rgba(255,255,255,0.1)"/>
+        )}
 
         <g pointerEvents="none">
-          {ticks.xTicks.map((tx,i)=>(
-            <line key={`gx-${i}`} x1={xToSvg(tx)} y1={pad} x2={xToSvg(tx)} y2={height-pad} stroke="rgba(255,255,255,0.06)"/>
-          ))}
-          {ticks.yTicks.map((ty,i)=>(
-            <line key={`gy-${i}`} x1={pad} y1={yToSvg(ty)} x2={width-pad} y2={yToSvg(ty)} stroke="rgba(255,255,255,0.06)"/>
-          ))}
+          {ticks.xTicks.map((tx,i)=><line key={`gx-${i}`} x1={xToSvg(tx)} y1={PLOT_PAD} x2={xToSvg(tx)} y2={height-PLOT_PAD} stroke="rgba(255,255,255,0.06)"/>)}
+          {ticks.yTicks.map((ty,i)=><line key={`gy-${i}`} x1={PLOT_PAD} y1={yToSvg(ty)} x2={width-PLOT_PAD} y2={yToSvg(ty)} stroke="rgba(255,255,255,0.06)"/>)}
         </g>
 
         <g pointerEvents="none">
-          {ticks.xTicks.map((tx,i)=>(
-            <text key={`xl-${i}`} x={xToSvg(tx)} y={height - pad + 20} textAnchor="middle" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">
-              {fmtSymbolic2(tx)}
-            </text>
-          ))}
-          {ticks.yTicks.map((ty,i)=>(
-            <text key={`yl-${i}`} x={pad - 10} y={yToSvg(ty)+4} textAnchor="end" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">
-              {fmtSymbolic2(ty)}
-            </text>
-          ))}
+          <line x1={PLOT_PAD} x2={width-PLOT_PAD} y1={yToSvg(0)} y2={yToSvg(0)} stroke="rgba(255,255,255,0.35)"/>
+          <line y1={PLOT_PAD} y2={height-PLOT_PAD} x1={xToSvg(0)} x2={xToSvg(0)} stroke="rgba(255,255,255,0.35)"/>
+          {ticks.xTicks.map((tx,i)=><text key={`xl-${i}`} x={xToSvg(tx)} y={height - PLOT_PAD + 20} textAnchor="middle" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">{fmtSymbolic2(tx)}</text>)}
+          {ticks.yTicks.map((ty,i)=><text key={`yl-${i}`} x={PLOT_PAD - 10} y={yToSvg(ty)+4} textAnchor="end" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">{fmtSymbolic2(ty)}</text>)}
         </g>
-
-        <line x1={pad} x2={width-pad} y1={yToSvg(0)} y2={yToSvg(0)} stroke="rgba(255,255,255,0.35)" pointerEvents="none"/>
-        <line y1={pad} y2={height-pad} x1={xToSvg(0)} x2={xToSvg(0)} stroke="rgba(255,255,255,0.35)" pointerEvents="none"/>
 
         <g clipPath="url(#plot-clip)">
           <AnimatePresence>
@@ -617,90 +589,57 @@ export default function Graph({
             ))}
           </AnimatePresence>
 
-            <AnimatePresence>
-              {pathsPerLayer.map((p,i)=>p.pD && (
-                <motion.path key={`d1-${p.id}`} d={p.pD} fill="none" stroke="url(#fdash)" strokeDasharray="6 8"
-                  strokeOpacity={(pathsPerLayer[i]?.opacity ?? 1)*0.9} strokeWidth="1.6"
-                  initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
-              ))}
-            </AnimatePresence>
+          <AnimatePresence>
+            {pathsPerLayer.map((p,i)=>p.pD && (
+              <motion.path key={`d1-${p.id}`} d={p.pD} fill="none" stroke="url(#fdash)" strokeDasharray="6 8"
+                strokeOpacity={(pathsPerLayer[i]?.opacity ?? 1)*0.9} strokeWidth="1.6"
+                initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
+            ))}
+          </AnimatePresence>
 
-            <AnimatePresence>
-              {pathsPerLayer.map((p,i)=>p.pD2 && (
-                <motion.path key={`d2-${p.id}`} d={p.pD2} fill="none" stroke="rgba(244,244,244,0.92)" strokeDasharray="3 6"
-                  strokeOpacity={(pathsPerLayer[i]?.opacity ?? 1)*0.9} strokeWidth="1.4"
-                  initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
-              ))}
-            </AnimatePresence>
+          <AnimatePresence>
+            {pathsPerLayer.map((p,i)=>p.pD2 && (
+              <motion.path key={`d2-${p.id}`} d={p.pD2} fill="none" stroke="rgba(244,244,244,0.92)" strokeDasharray="3 6"
+                strokeOpacity={(pathsPerLayer[i]?.opacity ?? 1)*0.9} strokeWidth="1.4"
+                initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
+            ))}
+          </AnimatePresence>
 
-            {Array.from(taylorFrozen.values()).map(val=>{
-              if(!val.pts || val.pts.length<2) return null;
-              const dNow=buildUniformPath(val.pts, xToSvg, yToSvg);
-              return (
-                <motion.path key={`taylor-${val.id}`} d={dNow} fill="none" stroke={val.color} strokeOpacity={val.opacity}
-                  strokeWidth="2" strokeLinecap="round" strokeDasharray="2 10"
-                  animate={{ d:dNow, opacity:val.opacity }}
-                  transition={{ duration:isPanning?0:0.3, ease:'easeOut' }}/>
-              );
-            })}
+          <AnimatePresence>
+            {showIntersections && intersections.map((p,i)=>(
+              <motion.circle key={`ix-${i}`} cx={xToSvg(p.x)} cy={yToSvg(p.y)} r="4.2"
+                fill="#0b0b0b" stroke="#a78bfa" strokeWidth="1.6"
+                initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
+            ))}
+          </AnimatePresence>
 
-            <AnimatePresence>
-              {showIntersections && intersections.map((p,i)=>(
-                <motion.circle key={`ix-${i}`} cx={xToSvg(p.x)} cy={yToSvg(p.y)} r="4.2"
-                  fill="#0b0b0b" stroke="#a78bfa" strokeWidth="1.6"
-                  initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
-              ))}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {showRoots && rootsPerLayer.map(layer=>(
-                <g key={`roots-${layer.id}`} pointerEvents="none">
-                  {layer.roots.map((p,i)=>(
-                    <motion.circle key={`root-${layer.id}-${i}`} cx={xToSvg(p.x)} cy={yToSvg(p.y)} r="4"
-                      fill="#0b0b0b" stroke="#60a5fa" strokeWidth="1.6"
-                      initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
-                  ))}
-                </g>
-              ))}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {showExtrema && extsPerLayer.map(layer=>(
-                <g key={`exts-${layer.id}`} pointerEvents="none">
-                  {layer.exts.map((p,i)=>(
-                    <motion.circle key={`ext-${layer.id}-${i}`} cx={xToSvg(p.x)} cy={yToSvg(p.y)} r="4.2"
-                      fill="#0b0b0b" stroke="#f472b6" strokeWidth="1.6"
-                      initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
-                  ))}
-                </g>
-              ))}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {manualPoints.map(p=>{
-                const hovered=hoverPointId===p.id;
-                return (
-                  <motion.g key={`mp-${p.id}`} initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}>
-                    <circle cx={xToSvg(p.x)} cy={yToSvg(p.y)} r={hovered?6.5:5}
-                      fill={hovered?'#181818':'#111'} stroke={hovered?'#ffd166':'#fff'} strokeWidth={hovered?2:1.6}/>
-                  </motion.g>
-                );
-              })}
-            </AnimatePresence>
-
-            {traceActive && (
-              <g pointerEvents="none">
-                <circle cx={tracePx} cy={tracePy} r="5.5" fill="#0b0b0b" stroke="#ffd166" strokeWidth="2"/>
+          <AnimatePresence>
+            {showRoots && rootsPerLayer.map(layer=>(
+              <g key={`roots-${layer.id}`} pointerEvents="none">
+                {layer.roots.map((p,i)=>(
+                  <motion.circle key={`root-${layer.id}-${i}`} cx={xToSvg(p.x)} cy={yToSvg(p.y)} r="4"
+                    fill="#0b0b0b" stroke="#60a5fa" strokeWidth="1.6"
+                    initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
+                ))}
               </g>
-            )}
+            ))}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {showExtrema && extsPerLayer.map(layer=>(
+              <g key={`exts-${layer.id}`} pointerEvents="none">
+                {layer.exts.map((p,i)=>(
+                  <motion.circle key={`ext-${layer.id}-${i}`} cx={xToSvg(p.x)} cy={yToSvg(p.y)} r="4.2"
+                    fill="#0b0b0b" stroke="#f472b6" strokeWidth="1.6"
+                    initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}/>
+                ))}
+              </g>
+            ))}
+          </AnimatePresence>
         </g>
       </svg>
 
-      {coord.show && (
-        <div className="coord-hud">
-          <span className="mono">({fmtSymbolic2(coord.x)}, {fmtSymbolic2(coord.y)})</span>
-        </div>
-      )}
+      {coord.show && <div className="coord-hud"><span className="mono">({fmtSymbolic2(coord.x)}, {fmtSymbolic2(coord.y)})</span></div>}
       {hoveredPoint && Number.isFinite(hoverPx) && Number.isFinite(hoverPy) && (
         <div className="point-tooltip" style={{ left:hoverPx, top:hoverPy }}>
           <span className="mono">({fmtSymbolic2(hoveredPoint.x)}, {fmtSymbolic2(hoveredPoint.y)})</span>

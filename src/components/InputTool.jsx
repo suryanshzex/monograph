@@ -23,7 +23,7 @@ export default function InputTool({ open, onClose }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 40);
+    if (open) setTimeout(() => inputRef.current?.focus(), 80);
     else { setQuery(''); setResp(null); setErr(null); }
   }, [open]);
 
@@ -78,8 +78,7 @@ export default function InputTool({ open, onClose }) {
             <div className="cp-row big"><K latex={`${lhs} = ${rhs}`} block /></div>
             {exact.length > 0 && (
               <div className="cp-row">
-                Exact:&nbsp;
-                {exact.map((ltx, i) => <span key={i} className="mr12"><K latex={ltx} /></span>)}
+                Exact:&nbsp;{exact.map((ltx, i) => <span key={i} className="mr12"><K latex={ltx} /></span>)}
               </div>
             )}
             {nums.length > 0 && <div className="cp-row">Numeric: {nums.join(', ')}</div>}
@@ -137,6 +136,8 @@ export default function InputTool({ open, onClose }) {
     }
   }, [loading, err, resp]);
 
+  if (!open) return null;
+
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -159,10 +160,16 @@ export default function InputTool({ open, onClose }) {
               <input
                 ref={inputRef}
                 className="cp-input mono"
-                placeholder="solve x^2-4=0 • roots of sin x • derivative of sin x • integrate x^2 • integrate sin x from 0 to pi • taylor e^x at 0 degree 10"
+                placeholder="input query • eg: solve x^2 - 4 = 0"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={stopGlobal}
+                inputMode="text"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="go"
+                autocomplete="off"
               />
               <div className="cp-results">{Body}</div>
             </motion.div>

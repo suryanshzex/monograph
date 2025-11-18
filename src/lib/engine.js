@@ -5,7 +5,6 @@ import 'nerdamer/Solve';
 import 'nerdamer/Extra';
 import { normalizeImplicitMul } from './math.js';
 
-// Helpers
 const toTex = (exprStr) => {
   try { return nerdamer(exprStr).toTeX(); } catch { return String(exprStr); }
 };
@@ -15,16 +14,14 @@ const toTexExpr = (expr) => {
 };
 
 const clean = (s = '') => {
-  // Keep ^ for powers (nerdamer uses ^). Normalize implicit multiplication.
   let out = s.trim()
     .replace(/π/g, 'pi')
-    .replace(/\be\b/g, 'e'); // nerdamer understands e
+    .replace(/\be\b/g, 'e');
   out = normalizeImplicitMul(out);
   return out;
 };
 
 const parseBounds = (s) => {
-  // ... from a to b ... or ... between a and b ...
   const m1 = s.match(/\bfrom\s+(.+?)\s+to\s+(.+?)\s*$/i);
   const m2 = s.match(/\bbetween\s+(.+?)\s+and\s+(.+?)\s*$/i);
   const m = m1 || m2;
@@ -40,13 +37,11 @@ export function parseQuery(raw) {
   const low = s.toLowerCase();
   if (!s) return { intent: 'error', error: 'Empty input', raw };
 
-  // taylor f at a (degree|order n)?
   const mt = s.match(/^taylor\s+(.+?)\s+at\s+(.+?)(?:\s+(?:degree|order)\s+(\d+))?\s*$/i);
   if (mt) {
     return { intent: 'taylor', expr: clean(mt[1]), a: clean(mt[2]), degree: mt[3] ? parseInt(mt[3],10) : 10, raw };
   }
 
-  // integrate / integral / definite integral / antiderivative
   if (/^(integrate|integral|definite integral|find integral|antiderivative)\s+/i.test(s)) {
     const t = s.replace(/^(integrate|integral|definite integral|find integral|antiderivative)\s+/i, '').trim();
     const binfo = parseBounds(t);
@@ -56,21 +51,17 @@ export function parseQuery(raw) {
     return { intent: 'integral', expr: clean(t), raw };
   }
 
-  // derivative variants
   const md = s.match(/^(?:find\s+)?derivative\s+(?:of\s+)?(.+)$/i)
          || (/^differentiate\s+/i.test(s) ? [null, s.replace(/^differentiate\s+/i,'')] : null)
          || (/^d\/dx\s+/i.test(s) ? [null, s.replace(/^d\/dx\s+/i,'')] : null);
   if (md) return { intent: 'derivative', expr: clean(md[1]), raw };
 
-  // factor / expand
   if (/^factor\s+/i.test(s)) return { intent: 'factor', expr: clean(s.slice(7)), raw };
   if (/^expand\s+/i.test(s)) return { intent: 'expand', expr: clean(s.slice(7)), raw };
 
-  // roots / zeros / find roots of …
   const mr = s.match(/^(?:roots|zeros|find roots|find zeros)\s+(?:of\s+)?(.+)$/i);
   if (mr) return { intent: 'solve', left: clean(mr[1]), right: '0', raw };
 
-  // solve …
   if (/^solve\s+/i.test(s)) {
     const t = s.slice(6).trim();
     if (t.includes('=')) {
@@ -80,7 +71,6 @@ export function parseQuery(raw) {
     return { intent: 'solve', left: clean(t), right: '0', raw };
   }
 
-  // bare equation a=b
   if (s.includes('=')) {
     const [L, R] = s.split('=', 1);
     return { intent: 'solve', left: clean(L), right: clean(s.slice(L.length+1)), raw };
@@ -89,7 +79,6 @@ export function parseQuery(raw) {
   return { intent: 'error', error: 'Try: solve x^2-4=0, derivative sin x, integrate sin x from 0 to pi, factor x^4-1, expand (x+1)^3, taylor e^x at 0 degree 10', raw };
 }
 
-// Numeric helpers
 const toNumber = (str) => {
   if (typeof str === 'number') return str;
   if (typeof str !== 'string') return NaN;
@@ -97,7 +86,6 @@ const toNumber = (str) => {
   if (/^[+-]?\d+(\.\d+)?$/.test(s)) return Number(s);
   const frac = s.match(/^([+-]?\d+)\s*\/\s*([+-]?\d+)$/);
   if (frac) return Number(frac[1]) / Number(frac[2]);
-  // last resort: try nerdamer to value
   try {
     const v = nerdamer(s);
     const n = Number(v.evaluate().valueOf());
@@ -122,19 +110,16 @@ const numericRootsScan = (eqExprStr, span=50, steps=2000) => {
     if (!Number.isFinite(y0) || !Number.isFinite(y1)) continue;
     if (y0===0) { roots.push(xs[i-1]); continue; }
     if (y0*y1<0){
-      // linear interpolation
       const t = xs[i-1] - y0*(xs[i]-xs[i-1])/(y1 - y0);
       if (Number.isFinite(t)) roots.push(t);
     }
   }
-  // dedupe
   roots.sort((a,b)=>a-b);
   const out=[];
   for (const r of roots) if (!out.length || Math.abs(out[out.length-1]-r)>1e-6) out.push(r);
   return out;
 };
 
-// Taylor via derivative loop
 const factorial = (n)=> n<=1?1:n*factorial(n-1);
 
 export function buildTaylor(expr, a, degree){
@@ -150,13 +135,11 @@ export function buildTaylor(expr, a, degree){
       if (k===0) terms.push(`${val}`);
       else {
         const denom = factorial(k);
-        // term = val/denom * (x-A)^k
-        if (A===0) terms.push(`${val/denom}*x^${k}`);
+       if (A===0) terms.push(`${val/denom}*x^${k}`);
         else terms.push(`${val/denom}*(x-(${A}))^${k}`);
       }
     } catch { terms.push('0'); }
   }
-  // Build poly and expand for clean output
   const sum = terms.join('+');
   let poly = sum;
   try { poly = nerdamer(sum).expand().text(); } catch {}
@@ -166,7 +149,6 @@ export function buildTaylor(expr, a, degree){
   };
 }
 
-// Main dispatcher
 export async function computeLocal(query) {
   const resp = parseQuery(query);
   const intent = resp.intent;
@@ -176,15 +158,12 @@ export async function computeLocal(query) {
       const left = resp.left, right = resp.right;
       const eq = `(${left})-(${right})`;
       let exactLatex = [];
-      // Try nerdamer solve first
       try {
         const sol = nerdamer(`solve(${eq}, x)`);
         const solStr = (sol && typeof sol.text==='function') ? sol.text() : String(sol);
-        // Expect "[a,b,...]"; parse roughly
         const arr = solStr.replace(/^\[|\]$/g,'').split(',').map(s=>s.trim()).filter(Boolean);
         exactLatex = arr.map(s => toTexExpr(s));
       } catch {}
-      // Numeric fallback
       const numeric = numericRootsScan(eq);
       return {
         intent: 'solve',
@@ -242,10 +221,8 @@ export async function computeLocal(query) {
 
     if (intent === 'integral_def') {
       const { expr, a, b } = resp;
-      // Try symbolic definite integral
       let val = '';
       try { val = nerdamer(`defint(${expr}, x, ${a}, ${b})`).text(); } catch {}
-      // Fallback numeric if defint failed or returned defint(...)
       const needNumeric = !val || /defint\(/.test(val);
       if (needNumeric) {
         const f = (x)=>evalAt(expr, x);
@@ -280,13 +257,12 @@ export async function computeLocal(query) {
       };
     }
 
-    return resp; // error or unknown
+    return resp;
   } catch (e) {
     return { intent: 'error', error: e?.message || 'Computation error' };
   }
 }
 
-// Numeric definite integral (adaptive Simpson)
 function simpsonAdaptive(f, a, b, eps=1e-7, maxDepth=16){
   const S = (f,a,b)=> (b-a)/6*(f(a)+4*f((a+b)/2)+f(b));
   const recurse=(f,a,b,eps,whole,depth)=>{

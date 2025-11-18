@@ -42,9 +42,8 @@ const fmtSymbolic2 = v => {
   if (piForm) return piForm;
   const eForm = matchCommon(v, Math.E, COMMON_E_ALL, 'e');
   if (eForm) return eForm;
-  return Number.isFinite(v) ? v.toFixed(2) : 'NaN';
+  return Number.isFinite(v) ? (Math.abs(v) < 1e-3 || Math.abs(v) > 1e4 ? v.toExponential(2) : v.toFixed(2)) : 'NaN';
 };
-const fmtManual3 = v => Number.isFinite(v) ? v.toFixed(3) : 'NaN';
 
 function sampleFunction(f, min, max, n) {
   const dx = (max - min) / Math.max(1, n - 1);
@@ -135,15 +134,18 @@ export default function Graph({
   const plotW = PLOT_INNER_W, plotH = PLOT_INNER_H;
   const N = samplesForWidth(plotW);
   const ND = Math.max(200, Math.floor(N*0.55));
+  const fmt = numberFmt || fmtSymbolic2;
+
   const builtLayers = useMemo(()=>layers.map(l=>{
     try {
-      const vars = l.params ? Object.fromEntries(Object.entries(l.params).map(([k,v])=>[k,v.value])) : {};
+      const vars = l.params ? Object.fromEntries(Object.entries(l.params).map(([k,v])=>[k, v.value])) : {};
       const mf = buildMathFunctions(l.expr || '0', vars);
       return { ...l, ...mf };
     } catch {
       return { ...l, f: (_)=>NaN, df: (_)=>NaN, error:'Invalid expression' };
     }
   }), [layers]);
+
   const seriesPerLayer = useMemo(()=>builtLayers.map(bl=>{
     const f = bl.f || (_=>NaN);
     const df = bl.df || (_=>NaN);
@@ -162,18 +164,23 @@ export default function Graph({
     const dataD2 = sampleFunction(d2, domain.min, domain.max, ND);
     return { id: bl.id, dataF, dataD, dataD2 };
   }), [builtLayers, domain, N, ND]);
+
   const computedY = useMemo(()=>{
     const all = seriesPerLayer.flatMap(s=>s.dataF);
     return robustYRange([all], [-2,2]);
   }, [seriesPerLayer]);
+
   useEffect(()=>{ onYRangeComputed && onYRangeComputed(computedY); }, [computedY, onYRangeComputed]);
+
   const yRangeUsed = yRange ? [yRange.min, yRange.max] : computedY;
+
   const sx = (domain.max - domain.min)/plotW || 1;
   const sy = (yRangeUsed[1] - yRangeUsed[0])/plotH || sx;
   const xToSvg = x => pad + (x - domain.min)/sx;
   const yToSvg = y => pad + (yRangeUsed[1] - y)/sy;
   const svgToX = px => domain.min + (px - pad)*sx;
   const svgToY = py => yRangeUsed[1] - (py - pad)*sy;
+
   const ticks = useMemo(()=>{
     const xs = niceStep(domain.max - domain.min, 8);
     const ys = niceStep(yRangeUsed[1]-yRangeUsed[0], 8);
@@ -182,6 +189,7 @@ export default function Graph({
       yTicks: genTicks(yRangeUsed[0], yRangeUsed[1], ys)
     };
   }, [domain, yRangeUsed]);
+
   const pathsPerLayer = useMemo(()=>seriesPerLayer.map((srs,idx)=>{
     const color = layers[idx]?.color || '#fff';
     const opacity = layers[idx]?.opacity ?? 1;
@@ -194,6 +202,7 @@ export default function Graph({
     const pD2 = (!hide && layers[idx]?.showD2) ? buildUniformPath(sanitize(srs.dataD2), xToSvg, yToSvg) : '';
     return { id: layers[idx]?.id ?? idx, pF, pD, pD2, color, opacity, hide };
   }), [seriesPerLayer, layers, xToSvg, yToSvg]);
+
   const rootsPerLayer = useMemo(()=>{
     if (!showRoots) return layers.map((l,i)=>({ id: layers[i]?.id ?? i, roots: [] }));
     return seriesPerLayer.map((s,idx)=>{
@@ -212,6 +221,7 @@ export default function Graph({
       return { id: layers[idx]?.id ?? idx, roots: out };
     });
   }, [showRoots, seriesPerLayer, layers, pathsPerLayer]);
+
   const extsPerLayer = useMemo(()=>{
     if (!showExtrema) return layers.map((l,i)=>({ id: layers[i]?.id ?? i, exts: [] }));
     return seriesPerLayer.map((s,idx)=>{
@@ -231,6 +241,7 @@ export default function Graph({
       return { id: layers[idx]?.id ?? idx, exts: out };
     });
   }, [showExtrema, seriesPerLayer, builtLayers, layers, pathsPerLayer]);
+
   const intersections = useMemo(()=>{
     if (!showIntersections || seriesPerLayer.length < 2) return [];
     const out=[];
@@ -271,7 +282,8 @@ export default function Graph({
       if (!L.showTaylor){ next.set(id,{ id, pts:[], color, opacity }); continue; }
       try{
         const terms=Math.max(1, Math.floor(Number(L.taylorDegree ?? 1)));
-        const tfun=taylorBuilder(L.expr || '0', Number(L.taylorA0Val ?? 0), terms);
+        const a0 = Number.isFinite(L.taylorA0Val) ? L.taylorA0Val : 0;
+        const tfun=taylorBuilder(L.expr || '0', a0, terms);
         const pts=sanitize(sampleFunction(tfun, domain.min, domain.max, TAYLOR_SAMPLES));
         next.set(id,{ id, pts, color, opacity });
       }catch{
@@ -291,6 +303,7 @@ export default function Graph({
     pendingTaylorRecompute.current=setTimeout(()=>recomputeTaylor.current(), 60);
     return ()=>{ if (pendingTaylorRecompute.current) clearTimeout(pendingTaylorRecompute.current); };
   }, [isPanning, taylorBuilder, domain.min, domain.max, ...layers.map(l=>`${l.id}|${l.expr}|${l.taylorDegree}|${l.taylorA0Val}|${l.showTaylor}|${l.color}|${l.opacity}`)]);
+
   const svgRef=useRef(null);
   const [hoverPointId,setHoverPointId]=useState(null);
   const [hoverFeature,setHoverFeature]=useState(null);
@@ -355,14 +368,74 @@ export default function Graph({
     return best;
   };
 
-  const onPointerDown=e=>{
+  const activePointers = useRef(new Map());
+  const pinchRef = useRef({
+    pinching: false,
+    startDist: 0,
+    anchorPx: 0,
+    anchorPy: 0,
+    baseDomain: null,
+    baseY: null
+  });
+  const distance = (a,b) => Math.hypot(a.px - b.px, a.py - b.py);
+  const midpoint = (a,b) => ({ px: (a.px+b.px)/2, py: (a.py+b.px)/2 });
+  const startPinchIfReady = () => {
+    if (activePointers.current.size === 2 && svgRef.current) {
+      const [p1, p2] = Array.from(activePointers.current.values());
+      pinchRef.current.pinching = true;
+      pinchRef.current.startDist = distance(p1, p2);
+      const mid = midpoint(p1, p2);
+      pinchRef.current.anchorPx = mid.px;
+      pinchRef.current.anchorPy = mid.py;
+      pinchRef.current.baseDomain = { ...domain };
+      pinchRef.current.baseY = { min: yRangeUsed[0], max: yRangeUsed[1] };
+    }
+  };
+  const applyPinch = () => {
+    if (!pinchRef.current.pinching || activePointers.current.size !== 2) return;
+    const [p1, p2] = Array.from(activePointers.current.values());
+    const dist = distance(p1, p2);
+    if (!dist || !pinchRef.current.startDist) return;
+    const ratio = pinchRef.current.startDist / dist;
+
+    const anchorPx = pinchRef.current.anchorPx;
+    const anchorPy = pinchRef.current.anchorPy;
+
+    const sx0 = (pinchRef.current.baseDomain.max - pinchRef.current.baseDomain.min) / plotW || 1;
+    const sy0 = (pinchRef.current.baseY.max - pinchRef.current.baseY.min) / plotH || sx0;
+
+    const sx2 = Math.max(1e-12, Math.min(1e12, sx0 * ratio));
+    const sy2 = Math.max(1e-12, Math.min(1e12, sy0 * ratio));
+
+    const anchorX = pinchRef.current.baseDomain.min + (anchorPx - pad) * sx0;
+    const anchorY = pinchRef.current.baseY.max - (anchorPy - pad) * sy0;
+
+    const newMinX = anchorX - (anchorPx - pad) * sx2;
+    const newMaxX = newMinX + plotW * sx2;
+    const newMaxY = anchorY + (anchorPy - pad) * sy2;
+    const newMinY = newMaxY - plotH * sy2;
+
+    onDomainChange && onDomainChange({ min: newMinX, max: newMaxX });
+    onYRangeChange && onYRangeChange({ min: newMinY, max: newMaxY });
+  };
+
+  const onPointerDown = (e) => {
     if(!svgRef.current) return;
     const rect=svgRef.current.getBoundingClientRect();
     const px=e.clientX-rect.left, py=e.clientY-rect.top;
+
+    activePointers.current.set(e.pointerId, { px, py });
+    if (activePointers.current.size === 2) {
+      pinchRef.current.pinching = false;
+      startPinchIfReady();
+    }
+
     if(!inside(px,py)) return;
+
     if ((e.button===0 || (e.buttons&1)) && e.altKey){
       onManualPointAdd(svgToX(px), svgToY(py)); return;
     }
+
     if (e.button===0 || (e.buttons&1)){
       const hitId=hitManualPoint(px,py);
       if (hitId!=null){
@@ -386,6 +459,7 @@ export default function Graph({
         e.preventDefault(); return;
       }
     }
+
     if (e.button===0 || e.button===1 || (e.buttons&1) || (e.buttons&4)){
       dragRef.current.dragging=true;
       dragRef.current.action='pan';
@@ -397,10 +471,21 @@ export default function Graph({
       e.preventDefault();
     }
   };
-  const onPointerMove=e=>{
+
+  const onPointerMove = (e) => {
     if(!svgRef.current) return;
     const rect=svgRef.current.getBoundingClientRect();
     const px=e.clientX-rect.left, py=e.clientY-rect.top;
+
+    if (activePointers.current.has(e.pointerId)) {
+      activePointers.current.set(e.pointerId, { px, py });
+      if (activePointers.current.size === 2) {
+        e.preventDefault();
+        applyPinch();
+        return;
+      }
+    }
+
     if(!dragRef.current.dragging){
       const hitId=inside(px,py)?hitManualPoint(px,py):null;
       setHoverPointId(hitId);
@@ -409,7 +494,9 @@ export default function Graph({
         setHoverFeature(f?{ x:f.x, y:f.y, type:f.type }:null);
       } else setHoverFeature(null);
     } else setHoverFeature(null);
+
     if(!dragRef.current.dragging) return;
+
     if(dragRef.current.action==='point' && dragRef.current.pointId!=null){
       const freeX=svgToX(px), freeY=svgToY(py);
       let nextX=freeX, nextY=freeY;
@@ -419,13 +506,15 @@ export default function Graph({
         dragRef.current.axisLocked=Math.abs(dx)>=Math.abs(dy)?'x':'y';
         if (dragRef.current.axisLocked==='x') nextY=dragRef.current.pointStart.y; else nextX=dragRef.current.pointStart.x;
       } else dragRef.current.axisLocked=null;
+
       onManualPointsChange(manualPoints.map(p =>
         p.id===dragRef.current.pointId
-          ? { ...p, x:nextX, y:nextY, xStr:fmtManual3(nextX), yStr:fmtManual3(nextY) }
+          ? { ...p, x:nextX, y:nextY, xStr: format3(nextX), yStr: format3(nextY) }
           : p
       ));
       return;
     }
+
     if(dragRef.current.action==='trace' && dragRef.current.traceLayer!=null){
       const X=svgToX(px);
       let Y=NaN;
@@ -445,6 +534,7 @@ export default function Graph({
       dragRef.current.traceY=Y;
       return;
     }
+
     if(dragRef.current.action==='pan'){
       let dxPx=px - dragRef.current.lastPx;
       let dyPx=py - dragRef.current.lastPy;
@@ -452,8 +542,10 @@ export default function Graph({
         dragRef.current.axisLocked=Math.abs(dxPx)>=Math.abs(dyPx)?'x':'y';
         if (dragRef.current.axisLocked==='x') dyPx=0; else dxPx=0;
       } else dragRef.current.axisLocked=null;
+
       const dX=-dxPx*sx;
       const dY=dyPx*sy;
+
       if(onDomainChange){
         const nx={ min:dragRef.current.domain.min+dX, max:dragRef.current.domain.max+dX };
         onDomainChange(nx);
@@ -469,11 +561,13 @@ export default function Graph({
       if(!isPanning) setIsPanning(true);
     }
   };
-  const finishPanSoon=()=>{
-    if(panEndTimer.current) clearTimeout(panEndTimer.current);
-    panEndTimer.current=setTimeout(()=>setIsPanning(false),120);
-  };
-  const onPointerUp=e=>{
+
+  const onPointerUp = (e) => {
+    activePointers.current.delete(e.pointerId);
+    if (activePointers.current.size < 2) {
+      pinchRef.current.pinching = false;
+    }
+
     dragRef.current.dragging=false;
     if(dragRef.current.action==='pan') finishPanSoon();
     dragRef.current.action='none';
@@ -484,7 +578,10 @@ export default function Graph({
     dragRef.current.traceY=null;
     svgRef.current?.releasePointerCapture?.(e.pointerId);
   };
-  const onPointerLeave=()=>{
+
+  const onPointerLeave = () => {
+    activePointers.current.clear();
+    pinchRef.current.pinching = false;
     setHoverPointId(null);
     setHoverFeature(null);
     if(dragRef.current.dragging){
@@ -498,14 +595,12 @@ export default function Graph({
       dragRef.current.traceY=null;
     }
   };
-  const [coord,setCoord]=useState({ x:null, y:null, show:false });
-  const updateCoord=(clientX,clientY)=>{
-    if(!svgRef.current) return;
-    const rect=svgRef.current.getBoundingClientRect();
-    const px=clientX-rect.left, py=clientY-rect.top;
-    if(!inside(px,py)) return setCoord(c=>({ ...c, show:false }));
-    setCoord({ x:svgToX(px), y:svgToY(py), show:true });
+
+  const finishPanSoon=()=>{
+    if(panEndTimer.current) clearTimeout(panEndTimer.current);
+    panEndTimer.current=setTimeout(()=>setIsPanning(false),120);
   };
+
   const uniformZoomAround=(factor, anchorPx, anchorPy)=>{
     const anchorX=svgToX(anchorPx);
     const anchorY=svgToY(anchorPy);
@@ -527,8 +622,8 @@ export default function Graph({
     const sign=e.deltaY>0?1:-1;
     const factor=Math.exp(sign*Math.min(0.12, Math.abs(e.deltaY)*0.00045));
     uniformZoomAround(factor, px, py);
-    updateCoord(e.clientX,e.clientY);
   };
+
   useEffect(()=>{
     const el=svgRef.current;
     if(!el) return;
@@ -536,6 +631,16 @@ export default function Graph({
     el.addEventListener('contextmenu', handler);
     return ()=>el.removeEventListener('contextmenu', handler);
   }, []);
+
+  const [coord,setCoord]=useState({ x:null, y:null, show:false });
+  const updateCoord=(clientX,clientY)=>{
+    if(!svgRef.current) return;
+    const rect=svgRef.current.getBoundingClientRect();
+    const px=clientX-rect.left, py=clientY-rect.top;
+    if(!inside(px,py)) return setCoord(c=>({ ...c, show:false }));
+    setCoord({ x:svgToX(px), y:svgToY(py), show:true });
+  };
+
   const hoveredPoint=manualPoints.find(p=>p.id===hoverPointId) || null;
   const traceActive = dragRef.current.dragging && dragRef.current.action==='trace' && Number.isFinite(dragRef.current.traceX) && Number.isFinite(dragRef.current.traceY);
   const tracePx=traceActive?xToSvg(dragRef.current.traceX):null;
@@ -543,16 +648,24 @@ export default function Graph({
   const hoverPx=hoveredPoint?xToSvg(hoveredPoint.x):null;
   const hoverPy=hoveredPoint?yToSvg(hoveredPoint.y):null;
 
+  const format3 = (v) => {
+    if (!Number.isFinite(v)) return 'NaN';
+    const a = Math.abs(v);
+    if (a >= 1e4 || (a > 0 && a < 1e-3)) return v.toExponential(2);
+    return v.toFixed(3);
+  };
+
   return (
-    <div className="graph" style={{ position:'relative', cursor:hoverPointId?'grab':'default' }}>
+    <div className="graph" style={{ position:'relative' }}>
       <svg
         ref={svgRef}
         width={width}
         height={height}
         role="img"
         aria-label="Function graph"
+        style={{ touchAction: 'none' }}
         onWheel={onWheel}
-        onPointerDown={onPointerDown}
+        onPointerDown={e=>{ onPointerDown(e); updateCoord(e.clientX,e.clientY); }}
         onPointerMove={e=>{ onPointerMove(e); updateCoord(e.clientX,e.clientY); }}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerLeave}
@@ -577,8 +690,8 @@ export default function Graph({
         <g pointerEvents="none">
           <line x1={PLOT_PAD} x2={width-PLOT_PAD} y1={yToSvg(0)} y2={yToSvg(0)} stroke="rgba(255,255,255,0.35)"/>
           <line y1={PLOT_PAD} y2={height-PLOT_PAD} x1={xToSvg(0)} x2={xToSvg(0)} stroke="rgba(255,255,255,0.35)"/>
-          {ticks.xTicks.map((tx,i)=><text key={`xl-${i}`} x={xToSvg(tx)} y={height - PLOT_PAD + 20} textAnchor="middle" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">{fmtSymbolic2(tx)}</text>)}
-          {ticks.yTicks.map((ty,i)=><text key={`yl-${i}`} x={PLOT_PAD - 10} y={yToSvg(ty)+4} textAnchor="end" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">{fmtSymbolic2(ty)}</text>)}
+          {ticks.xTicks.map((tx,i)=><text key={`xl-${i}`} x={xToSvg(tx)} y={height - PLOT_PAD + 20} textAnchor="middle" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">{fmt(tx)}</text>)}
+          {ticks.yTicks.map((ty,i)=><text key={`yl-${i}`} x={PLOT_PAD - 10} y={yToSvg(ty)+4} textAnchor="end" fontSize="11" className="mono" fill="rgba(235,235,235,0.95)">{fmt(ty)}</text>)}
         </g>
 
         <g clipPath="url(#plot-clip)">
@@ -636,23 +749,41 @@ export default function Graph({
               </g>
             ))}
           </AnimatePresence>
+
+          <AnimatePresence>
+            {Array.from(taylorFrozen.values()).map(tl => tl.pts?.length ? (
+              <motion.path key={`taylor-${tl.id}`}
+                d={buildUniformPath(tl.pts, xToSvg, yToSvg)}
+                fill="none"
+                stroke={tl.color}
+                strokeWidth="1.6"
+                strokeOpacity={tl.opacity}
+                strokeDasharray="8 10"
+                initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}
+              />
+            ) : null)}
+          </AnimatePresence>
         </g>
       </svg>
 
-      {coord.show && <div className="coord-hud"><span className="mono">({fmtSymbolic2(coord.x)}, {fmtSymbolic2(coord.y)})</span></div>}
+      {coord.show && (
+        <div className="coord-hud" style={{ position:'absolute', left: PLOT_PAD + 8, bottom: 8, color:'rgba(235,235,235,0.95)', fontSize:12 }}>
+          <span className="mono">({fmt(coord.x)}, {fmt(coord.y)})</span>
+        </div>
+      )}
       {hoveredPoint && Number.isFinite(hoverPx) && Number.isFinite(hoverPy) && (
-        <div className="point-tooltip" style={{ left:hoverPx, top:hoverPy }}>
-          <span className="mono">({fmtSymbolic2(hoveredPoint.x)}, {fmtSymbolic2(hoveredPoint.y)})</span>
+        <div className="point-tooltip" style={{ position:'absolute', left:hoverPx, top:hoverPy, transform:'translate(-50%,-130%)', background:'rgba(0,0,0,0.5)', padding:'4px 6px', borderRadius:6, color:'#fff', fontSize:12 }}>
+          <span className="mono">({fmt(hoveredPoint.x)}, {fmt(hoveredPoint.y)})</span>
         </div>
       )}
       {hoverFeature && Number.isFinite(hoverFeature.x) && Number.isFinite(hoverFeature.y) && (
-        <div className="point-tooltip" style={{ left:xToSvg(hoverFeature.x), top:yToSvg(hoverFeature.y) }}>
-          <span className="mono">({fmtSymbolic2(hoverFeature.x)}, {fmtSymbolic2(hoverFeature.y)})</span>
+        <div className="point-tooltip" style={{ position:'absolute', left:xToSvg(hoverFeature.x), top:yToSvg(hoverFeature.y), transform:'translate(-50%,-130%)', background:'rgba(0,0,0,0.5)', padding:'4px 6px', borderRadius:6, color:'#fff', fontSize:12 }}>
+          <span className="mono">({fmt(hoverFeature.x)}, {fmt(hoverFeature.y)})</span>
         </div>
       )}
       {traceActive && Number.isFinite(tracePx) && Number.isFinite(tracePy) && (
-        <div className="point-tooltip" style={{ left:tracePx, top:tracePy }}>
-          <span className="mono">({fmtSymbolic2(dragRef.current.traceX)}, {fmtSymbolic2(dragRef.current.traceY)})</span>
+        <div className="point-tooltip" style={{ position:'absolute', left:tracePx, top:tracePy, transform:'translate(-50%,-130%)', background:'rgba(0,0,0,0.5)', padding:'4px 6px', borderRadius:6, color:'#fff', fontSize:12 }}>
+          <span className="mono">({fmt(dragRef.current.traceX)}, {fmt(dragRef.current.traceY)})</span>
         </div>
       )}
     </div>

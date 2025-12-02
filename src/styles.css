@@ -20,7 +20,6 @@ body {
 .logo.brand-mono { margin: 0; text-transform: lowercase; font-size: 26px; font-weight: 800; letter-spacing: 0.3px; background: linear-gradient(92deg, #fff 0%, #e5e7eb 50%, #cbd5e1 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .actions { display: inline-flex; gap: 10px; }
 
-
 .btn { appearance:none; background:transparent; border:none; color:var(--text); padding:6px 6px; cursor:pointer; font-weight:800; font-size:13px; border-radius:0; transform-origin:center; transition:transform .12s ease, opacity .12s ease; }
 .btn:hover { transform:scale(1.04); opacity:.95; }
 .btn:active { transform:scale(1.06); }
@@ -37,14 +36,12 @@ body {
 .pp-item { display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 8px; align-items: center; }
 .pp-tag { font-weight: 800; font-size: 12px; color: #dcdcdc; }
 
-
 .chip{ appearance:none; background:transparent; border:none; color:var(--text); padding:6px 6px; cursor:pointer; font-weight:800; font-size:12px; position:relative; transform-origin:center; transition:transform .12s ease, opacity .12s ease; }
 .chip:hover{ transform:scale(1.04); opacity:.95; }
-.chip::after{ content:''; position:absolute; left:0; right:0; bottom:-2px; height:2px; background:currentColor; transform:scaleX(0); transform-origin:left; transition:transform .18s ease; }
+.chip::after{ content:''; position:absolute; left:0; right:0; bottom:-2px; height:2px; background:currentColor; transform:scaleX(0); transform-origin:left; transition:transform .18s.ease; }
 .chip.toggle.on::after{ transform:scaleX(1); }
 .chip.danger { color: #ffd3d3; }
 .chip.tiny { font-size: 11px; padding: 2px 4px; }
-
 
 .input.inline{ width:100%; background:transparent; color:var(--text); border:0; border-bottom:1px dashed rgba(255,255,255,0.10); padding:4px 2px; font-size:13px; }
 .input.inline:focus{ outline:none; border-bottom:2px solid rgba(255,255,255,0.25); }
@@ -54,7 +51,7 @@ body {
 .input.range.pretty { -webkit-appearance: none; width: 100%; height: 6px; background: linear-gradient(90deg, rgba(96,165,250,0.3), rgba(244,114,182,0.3)); border-radius: 999px; outline: none; }
 .input.range.pretty::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(96,165,250,0.35), 0 4px 14px rgba(0,0,0,0.35); cursor: pointer; transition: transform .08s ease; }
 .input.range.pretty:active::-webkit-slider-thumb { transform: scale(1.06); }
-.input.color.subtle { width: 44px; height: 28px; padding: 0; border: 0; background: transparent; border-radius: 6px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--border-faint); margin-left: 6px; } /* spacing fix */
+.input.color.subtle { width: 44px; height: 28px; padding: 0; border: 0; background: transparent; border-radius: 6px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--border-faint); margin-left: 6px; }
 .bare-color { box-shadow: none; border: none; background: transparent; }
 
 .taylor-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
@@ -75,6 +72,7 @@ body {
 .overlay-zoom { position: absolute; right: 10px; top: 16px; display: flex; gap: 8px; }
 
 .coord-hud { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,0.28); border: 1px solid var(--border-faint); padding: 6px 10px; border-radius: 10px; font-size: 12px; color: var(--text); }
+.coord-hud-small { right: 10px; bottom: 10px; padding: 4px 8px; font-size: 11px; }
 
 .point-tooltip { position: absolute; transform: translate(-50%, -100%); background: rgba(0,0,0,0.35); border: 1px solid var(--border-faint); padding: 6px 8px; border-radius: 8px; font-size: 12px; color: var(--text); pointer-events: none; box-shadow: 0 8px 18px rgba(0,0,0,0.35); white-space: nowrap; }
 
@@ -120,4 +118,21 @@ ul, .list { list-style: none; padding-left: 0; }
 .coord-hud span {
   text-decoration: none !important;
   border-bottom: none !important;
+}
+
+.cp-ans-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 1.05rem;
+}
+.cp-ans-label {
+  font-weight: 700;
+  text-transform: lowercase;
+  opacity: 0.85;
+}
+.cp-ans-value {
+  font-size: 1.3rem;
+  font-weight: 700;
 }

@@ -1,11 +1,11 @@
 :root{
   --cp-backdrop-blur: 6px;
   --cp-backdrop-dim: 0.14;
-  --cp-shell-alpha: 0.06;      
+  --cp-shell-alpha: 0.06;
   --cp-shell-shadow: 0 30px 80px -28px rgba(0,0,0,0.62);
-  --cp-font: 17px;            
-  --cp-font-big: 1.35rem;       
-  --cp-inline-math: 1.12rem;     
+  --cp-font: 17px;
+  --cp-font-big: 1.35rem;
+  --cp-inline-math: 1.12rem;
 }
 
 .cp-root{ position: fixed; inset: 0; z-index: 2500; pointer-events: none; }
@@ -21,8 +21,8 @@
 .cp-center{
   position: absolute; inset: 0;
   display: grid;
-  place-items: center;           
-  min-height: 100dvh;            
+  place-items: center;
+  min-height: 100dvh;
   pointer-events: none;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
@@ -31,7 +31,7 @@
   width: min(900px, 92vw);
   padding: 16px 18px 14px;
   border-radius: 16px;
-  background: rgba(12,12,12,var(--cp-shell-alpha)); 
+  background: rgba(12,12,12,var(--cp-shell-alpha));
   box-shadow: var(--cp-shell-shadow);
   pointer-events: auto;
   border: none;
@@ -39,12 +39,15 @@
 
 .cp-input{
   width: 100%;
-  font-size: calc(var(--cp-font) + 1px); 
+  font-size: calc(var(--cp-font) + 1px);
   padding: 14px 16px;
   border: none; outline: none;
   border-radius: 12px;
   color: #f7f7f7;
   background: rgba(255,255,255,0.10);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cp-input::placeholder{ color: rgba(247,247,247,0.64); }
 
@@ -53,6 +56,10 @@
   max-height: 42vh;
   overflow: auto;
   scrollbar-width: thin;
+}
+
+.cp-results-nowrap{
+  white-space: nowrap;
 }
 
 .cp-row{
@@ -74,16 +81,16 @@
 
 @media (max-width: 640px) {
   :root{
-    --cp-backdrop-blur: 3px;     
-    --cp-backdrop-dim: 0.18;      
-    --cp-shell-alpha: 0.10;     
-    --cp-font: 18px;              
+    --cp-backdrop-blur: 3px;
+    --cp-backdrop-dim: 0.18;
+    --cp-shell-alpha: 0.10;
+    --cp-font: 18px;
     --cp-font-big: 1.5rem;
     --cp-inline-math: 1.2rem;
   }
 
   .cp-center{
-    place-items: end center;       
+    place-items: end center;
     padding-bottom: max(12px, env(safe-area-inset-bottom));
     padding-left: max(8px, env(safe-area-inset-left));
     padding-right: max(8px, env(safe-area-inset-right));
@@ -103,7 +110,7 @@
   }
 
   .cp-results{
-    max-height: 60vh;  
+    max-height: 60vh;
   }
 }
 

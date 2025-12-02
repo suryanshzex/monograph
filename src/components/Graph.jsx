@@ -310,7 +310,7 @@ export default function Graph({
   const yRangeUsed = yRange ? [yRange.min, yRange.max] : computedY;
 
   const sx = (domain.max - domain.min) / plotW || 1;
-  const sy = (yRangeUsed[1] - yRangeUsed[0]) / plotH || sx;
+  const sy = ((yRangeUsed[1] - yRangeUsed[0]) / plotH || sx) * 0.85;
   const xToSvg = (x) => pad + (x - domain.min) / sx;
   const yToSvg = (y) => pad + (yRangeUsed[1] - y) / sy;
   const svgToX = (px) => domain.min + (px - pad) * sx;

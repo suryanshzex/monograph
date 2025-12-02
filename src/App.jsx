@@ -26,10 +26,8 @@ function rewriteEHatChain(input) {
   let out = '';
   let i = 0;
   const isIdentChar = (ch) => /[A-Za-z0-9_]/.test(ch);
-
   while (i < s.length) {
     const ch = s[i];
-
     if ((ch === 'e' || ch === 'E') && i + 1 < s.length && s[i + 1] === '^') {
       const prev = i > 0 ? s[i - 1] : '';
       if (isIdentChar(prev)) {
@@ -37,10 +35,8 @@ function rewriteEHatChain(input) {
         i += 1;
         continue;
       }
-
       let j = i + 2;
       let expStr = '';
-
       if (j < s.length && s[j] === '(') {
         let depth = 1;
         j += 1;
@@ -66,16 +62,13 @@ function rewriteEHatChain(input) {
         }
         expStr = s.slice(start, j).trim();
       }
-
       out += `exp(${expStr || '1'})`;
       i = j;
       continue;
     }
-
     out += ch;
     i += 1;
   }
-
   return out;
 }
 
@@ -93,8 +86,6 @@ export default function App() {
     taylorA0Expr: '0',
     params: {}
   }]);
-
-  const [showSettings, setShowSettings] = useState(false);
   const [yRange, setYRange] = useState(null);
   const [lastDataYRange, setLastDataYRange] = useState([-2, 2]);
   const [showRoots, setShowRoots] = useState(true);
@@ -103,6 +94,9 @@ export default function App() {
   const [manualPoints, setManualPoints] = useState([]);
   const [showCommand, setShowCommand] = useState(false);
   const [commandError, setCommandError] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [didAutoCenter, setDidAutoCenter] = useState(false);
 
   const buildError = useMemo(() => {
     try {
@@ -122,9 +116,7 @@ export default function App() {
   }, [layers]);
 
   useEffect(() => {
-    if (yRange == null) {
-      setYRange({ min: -5, max: 5 });
-    }
+    if (yRange == null) setYRange({ min: -5, max: 5 });
   }, [yRange]);
 
   const center = useCallback(() => {
@@ -134,6 +126,13 @@ export default function App() {
     setDomain({ min: -xSpan / 2, max: xSpan / 2 });
     setYRange({ min: -ySpan / 2, max: ySpan / 2 });
   }, [domain]);
+
+  useEffect(() => {
+    if (didAutoCenter) return;
+    if (yRange == null) return;
+    center();
+    setDidAutoCenter(true);
+  }, [didAutoCenter, yRange, center]);
 
   const zoomButtons = useCallback((scale) => {
     setDomain(prev => {
@@ -154,6 +153,8 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       if (showCommand && e.key === 'Escape') { setShowCommand(false); return; }
+      if (showSettings && e.key === 'Escape') { setShowSettings(false); return; }
+      if (showMobileSidebar && e.key === 'Escape') { setShowMobileSidebar(false); return; }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCommandError('');
@@ -163,14 +164,13 @@ export default function App() {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey) return;
       const k = e.key.toLowerCase();
-      if (k === 's') setShowSettings(v => !v);
       if (k === 'c') center();
       if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+') { e.preventDefault(); zoomButtons(0.9); }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === '-') { e.preventDefault(); zoomButtons(1.1); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [center, zoomButtons, showCommand]);
+  }, [center, zoomButtons, showCommand, showSettings, showMobileSidebar]);
 
   const updateLayerById = (id, patch) =>
     setLayers(ls => ls.map(l => (l.id === id ? { ...l, ...patch } : l)));
@@ -182,9 +182,7 @@ export default function App() {
       try {
         const keys = detectParams(expr);
         for (const k of keys) {
-          if (!nextParams[k]) {
-            nextParams[k] = { value: 1, min: -10, max: 10, step: 0.1 };
-          }
+          if (!nextParams[k]) nextParams[k] = { value: 1, min: -10, max: 10, step: 0.1 };
         }
         Object.keys(nextParams).forEach(k => {
           if (!keys.includes(k)) delete nextParams[k];
@@ -200,7 +198,7 @@ export default function App() {
       ...ls,
       {
         id,
-        expr: 'sin(x)',
+        expr: '',
         color: randLayerColor(),
         opacity: 1,
         showD1: false,
@@ -320,9 +318,11 @@ export default function App() {
   };
 
   return (
-    <div className="app shell mono-theme">
+    <div className="app shell">
       <header className="hero">
-        <h1 className="logo brand-mono">monograph</h1>
+        <div className="hero-left-wrap">
+          <h1 className="logo.brand-mono logo brand-mono">monograph</h1>
+        </div>
         <div className="actions">
           <button
             className="btn"
@@ -374,42 +374,34 @@ export default function App() {
 
           <div className="pp-head small">Manual points</div>
           <div className="pp-list">
-            <AnimatePresence initial={false}>
-              {manualPoints.map(p => (
-                <motion.div
-                  key={p.id}
-                  className="pp-item"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+            {manualPoints.map(p => (
+              <div className="pp-item" key={p.id}>
+                <span className="pp-tag">{p.label || 'P'}</span>
+                <input
+                  className="input inline mono small"
+                  type="text"
+                  value={p.xStr}
+                  onChange={(e) => onManualPointChange(p.id, 'x', e.target.value)}
+                  onBlur={() => onManualPointBlur(p.id, 'x')}
+                  placeholder="x"
+                />
+                <input
+                  className="input inline mono small"
+                  type="text"
+                  value={p.yStr}
+                  onChange={(e) => onManualPointChange(p.id, 'y', e.target.value)}
+                  onBlur={() => onManualPointBlur(p.id, 'y')}
+                  placeholder="y"
+                />
+                <button
+                  className="chip danger tiny"
+                  onClick={() => removeManualPoint(p.id)}
+                  title="Remove point"
                 >
-                  <span className="pp-tag">{p.label || 'P'}</span>
-                  <input
-                    className="input inline mono small"
-                    type="text"
-                    value={p.xStr}
-                    onChange={(e) => onManualPointChange(p.id, 'x', e.target.value)}
-                    onBlur={() => onManualPointBlur(p.id, 'x')}
-                    placeholder="x"
-                  />
-                  <input
-                    className="input inline mono small"
-                    type="text"
-                    value={p.yStr}
-                    onChange={(e) => onManualPointChange(p.id, 'y', e.target.value)}
-                    onBlur={() => onManualPointBlur(p.id, 'y')}
-                    placeholder="y"
-                  />
-                  <button
-                    className="chip danger tiny"
-                    onClick={() => removeManualPoint(p.id)}
-                    title="Remove point"
-                  >
-                    remove
-                  </button>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                  remove
+                </button>
+              </div>
+            ))}
           </div>
           <div className="pp-row">
             <button
@@ -421,10 +413,7 @@ export default function App() {
           </div>
         </aside>
 
-        <main
-          className="stage centered lifted"
-          style={{ position: 'relative' }}
-        >
+        <main className="stage centered lifted" style={{ position: 'relative' }}>
           <Graph
             layers={layersForGraph}
             domain={domain}
@@ -444,6 +433,83 @@ export default function App() {
             showYAxisIntercept={true}
           />
         </main>
+      </div>
+
+      <footer className="footer lifted">
+        <span>
+          Shortcuts: Cmd/Ctrl+K command • S settings • Left-drag pan (Shift =
+          axis lock) • Wheel zoom (uniform) • +/− or numpad ± • Alt-click to add
+          point • Drag on a curve to trace • Drag point + Shift to snap
+        </span>
+        <div className="made-with">
+          made with 💜 by{' '}
+          <a
+            href="https://suryanshzex.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            @suryanshzex
+          </a>
+        </div>
+      </footer>
+
+      <div className="mobile-main">
+        <div className="mobile-main-header">
+          <button
+            className="btn mobile-sidebar-toggle"
+            onClick={() => setShowMobileSidebar(true)}
+            aria-label="Open sidebar"
+          >
+            ☰
+          </button>
+          <div className="mobile-main-header-box">
+            <h1 className="logo brand-mono">monograph</h1>
+          </div>
+        </div>
+
+        <div className="mobile-main-top-right">
+          <button
+            className="btn mobile-center-btn"
+            onClick={center}
+            aria-label="Center graph"
+          >
+            center
+          </button>
+        </div>
+
+        <div className="mobile-main-graph">
+          <Graph
+            layers={layersForGraph}
+            domain={domain}
+            onDomainChange={setDomain}
+            onYRangeChange={setYRange}
+            numberFmt={(n) => formatNumberSmart(n, { maxDecimals: 6 })}
+            exprFmt={prettyExpr}
+            yRange={yRange}
+            onYRangeComputed={setLastDataYRange}
+            taylorBuilder={taylorFromExpr}
+            showRoots={showRoots}
+            showExtrema={showExtrema}
+            showIntersections={showIntersections}
+            manualPoints={manualPoints}
+            onManualPointsChange={setManualPoints}
+            onManualPointAdd={addManualPoint}
+            showYAxisIntercept={true}
+          />
+        </div>
+
+        <div className="mobile-footer">
+          <span className="mobile-footer-text">
+            made with 💜 by{' '}
+            <a
+              href="https://suryanshzex.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              @suryanshzex
+            </a>
+          </span>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -484,7 +550,7 @@ export default function App() {
                         type="text"
                         value={l.expr}
                         onChange={(e) => updateLayerExpr(l.id, e.target.value)}
-                        placeholder={idx === 0 ? 'sin(x)' : 'a*x + b'}
+                        placeholder={idx === 0 ? 'sin(x)' : 'new function'}
                       />
                     </label>
 
@@ -640,23 +706,264 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <footer className="footer lifted">
-        <span>
-          Shortcuts: Cmd/Ctrl+K command • S settings • Left-drag pan (Shift =
-          axis lock) • Wheel zoom (uniform) • +/− or numpad ± • Alt-click to add
-          point • Drag on a curve to trace • Drag point + Shift to snap
-        </span>
-        <div className="made-with">
-          made with 💜 by{' '}
-          <a
-            href="https://suryanshzex.com"
-            target="_blank"
-            rel="noopener noreferrer"
+      <AnimatePresence>
+        {showMobileSidebar && (
+          <motion.div
+            className="mobile-sidebar-shell"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
           >
-            @suryanshzex
-          </a>
-        </div>
-      </footer>
+            <div
+              className="mobile-overlay"
+              onClick={() => setShowMobileSidebar(false)}
+            />
+            <motion.div
+              className="mobile-sidebar-shell-inner"
+              initial={{ x: -360 }}
+              animate={{ x: 0 }}
+              exit={{ x: -360 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+            >
+              <div className="mobile-sidebar-panel">
+                <div className="mobile-sidebar-top">
+                  <div className="mobile-sidebar-top-row">
+                    <button
+                      className={`chip toggle ${showRoots ? 'on' : ''}`}
+                      onClick={() => setShowRoots(v => !v)}
+                    >
+                      roots
+                    </button>
+                    <button
+                      className={`chip toggle ${showExtrema ? 'on' : ''}`}
+                      onClick={() => setShowExtrema(v => !v)}
+                    >
+                      extrema
+                    </button>
+                    <button
+                      className={`chip toggle ${showIntersections ? 'on' : ''}`}
+                      onClick={() => setShowIntersections(v => !v)}
+                    >
+                      intersections
+                    </button>
+                  </div>
+                  <div className="mobile-sidebar-top-row">
+                    <button
+                      className="chip"
+                      onClick={() => { setShowMobileSidebar(false); setCommandError(''); setShowCommand(true); }}
+                    >
+                      command
+                    </button>
+                    <button
+                      className="chip"
+                      onClick={() => addManualPoint(0, 0)}
+                    >
+                      + point
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mobile-sidebar-bottom">
+                  <div className="pp-head small">Manual points</div>
+                  <div className="pp-list">
+                    {manualPoints.map(p => (
+                      <div className="pp-item" key={p.id}>
+                        <span className="pp-tag">{p.label || 'P'}</span>
+                        <input
+                          className="input inline mono small"
+                          type="text"
+                          value={p.xStr}
+                          onChange={(e) => onManualPointChange(p.id, 'x', e.target.value)}
+                          onBlur={() => onManualPointBlur(p.id, 'x')}
+                          placeholder="x"
+                        />
+                        <input
+                          className="input inline mono small"
+                          type="text"
+                          value={p.yStr}
+                          onChange={(e) => onManualPointChange(p.id, 'y', e.target.value)}
+                          onBlur={() => onManualPointBlur(p.id, 'y')}
+                          placeholder="y"
+                        />
+                        <button
+                          className="chip danger tiny"
+                          onClick={() => removeManualPoint(p.id)}
+                          title="Remove point"
+                        >
+                          remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pp-row">
+                    <button
+                      className="chip"
+                      onClick={() => addManualPoint()}
+                    >
+                      + add point
+                    </button>
+                  </div>
+
+                  <div className="divider" />
+
+                  {layers.map((l, idx) => (
+                    <section className="panel-clean" key={l.id}>
+                      <label>
+                        {`function ${idx + 1}`}
+                        <input
+                          className="input bare mono"
+                          type="text"
+                          value={l.expr}
+                          onChange={(e) => updateLayerExpr(l.id, e.target.value)}
+                          placeholder={idx === 0 ? 'sin(x)' : 'new function'}
+                        />
+                      </label>
+
+                      {l.params && Object.keys(l.params).length > 0 && (
+                        <>
+                          <div className="pp-head small">Parameters</div>
+                          {Object.entries(l.params).map(([k, meta]) => (
+                            <div className="taylor-row" key={`${l.id}-param-${k}`}>
+                              <span>{k}</span>
+                              <input
+                                className="input range pretty"
+                                type="range"
+                                min={meta.min}
+                                max={meta.max}
+                                step={meta.step}
+                                value={meta.value}
+                                onChange={(e) => {
+                                  const v = parseFloat(e.target.value);
+                                  updateLayerById(l.id, {
+                                    params: {
+                                      ...l.params,
+                                      [k]: { ...meta, value: v }
+                                    }
+                                  });
+                                }}
+                              />
+                              <span className="range-val mono">
+                                {formatNumberSmart(meta.value, { maxDecimals: 4 })}
+                              </span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+
+                      <div className="taylor-row" style={{ marginTop: 4 }}>
+                        <span>graph opacity</span>
+                        <input
+                          className="input range pretty"
+                          type="range"
+                          min={0.1}
+                          max={1}
+                          step={0.05}
+                          value={l.opacity ?? 1}
+                          onChange={(e) =>
+                            updateLayerById(l.id, {
+                              opacity: parseFloat(e.target.value)
+                            })
+                          }
+                        />
+                        <span className="range-val mono">
+                          {formatNumberSmart(l.opacity ?? 1, { maxDecimals: 2 })}
+                        </span>
+                      </div>
+
+                      <div className="taylor-row two-cols" style={{ marginTop: 4 }}>
+                        <span>graph color</span>
+                        <input
+                          className="input color subtle bare-color"
+                          type="color"
+                          value={l.color}
+                          onChange={(e) => updateLayerColor(l.id, e.target.value)}
+                          title="graph color"
+                        />
+                      </div>
+
+                      <div className="pp-row toggles" style={{ marginTop: 6 }}>
+                        <button
+                          className={`chip toggle ${l.showD1 ? 'on' : ''}`}
+                          onClick={() =>
+                            updateLayerById(l.id, { showD1: !l.showD1 })
+                          }
+                        >
+                          f′(x)
+                        </button>
+                        <button
+                          className={`chip toggle ${l.showD2 ? 'on' : ''}`}
+                          onClick={() =>
+                            updateLayerById(l.id, { showD2: !l.showD2 })
+                          }
+                        >
+                          f″(x)
+                        </button>
+                        <button
+                          className={`chip toggle ${l.showTaylor ? 'on' : ''}`}
+                          onClick={() =>
+                            updateLayerById(l.id, { showTaylor: !l.showTaylor })
+                          }
+                        >
+                          show taylor
+                        </button>
+                      </div>
+
+                      <div className="taylor-row">
+                        <span>taylor degree</span>
+                        <input
+                          className="input range pretty"
+                          type="range"
+                          min="1"
+                          max="20"
+                          value={l.taylorDegree}
+                          onChange={(e) =>
+                            updateLayerById(l.id, {
+                              taylorDegree: Number(e.target.value)
+                            })
+                          }
+                        />
+                        <span className="range-val mono">{l.taylorDegree}</span>
+                      </div>
+
+                      <div className="taylor-row two-cols">
+                        <span>taylor center</span>
+                        <input
+                          className="input bare mono"
+                          type="text"
+                          value={l.taylorA0Expr}
+                          onChange={(e) =>
+                            updateLayerById(l.id, { taylorA0Expr: e.target.value })
+                          }
+                          placeholder="e.g., 0, pi/2, 2"
+                        />
+                      </div>
+
+                      {idx > 0 && (
+                        <div className="inline-buttons">
+                          <button
+                            className="chip danger"
+                            onClick={() => removeLayer(l.id)}
+                            title="Remove function"
+                          >
+                            remove
+                          </button>
+                        </div>
+                      )}
+                      {idx < layers.length - 1 && <div className="divider" />}
+                    </section>
+                  ))}
+
+                  <div className="inline-buttons" style={{ marginTop: 8 }}>
+                    <button className="chip" onClick={addLayer}>
+                      + add function
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <InputTool
         open={showCommand}
